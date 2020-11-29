@@ -8,10 +8,13 @@ from PIL import Image
 from matplotlib import pyplot as plt
 from argparse import ArgumentParser
 from pathlib import Path
-
+from keras.models import load_model
 
 TEST = True
 TEST_PREFIX = "test_face"
+
+emotion = ['Surprise', 'Fear', 'Disgust', 'Happiness', 'Sadness', 'Anger', 'Neutral']
+
 class FaceImageProcessor:
     
     def __init__(self, imgpath = None):
@@ -68,58 +71,87 @@ class FaceImageProcessor:
 
 
 
-class VideoStreamer:
+class VideoStreamModel:
 
-    def __init__(self):
+    def __init__(self, model_path):
         self.__ct = 0;
+        self._model = load_model(model_path)
         self._face_obj = FaceImageProcessor()
     
+    def display_top2_emoji(self, top1, top2):
+        base_path = Path('./emotion_images')
+        top1_img = Image.open(base_path / str(top1))
+        top2_img = Image.open(base_path / str(top2))
+        plt.subplot(121)
+        plt.imshow(top1_img)
+        plt.title(f"Top 1: {emotion[top1]}")
+        plt.axis('off')
+
+        plt.subplot(122)
+        plt.imshow(top2_img)
+        plt.title(f"Top 2: {emotion[top2]}")
+        plt.axis('off')
+        
+        plt.show()
+
+
     def start_webcam(self):
         self._vid_stream = cv2.VideoCapture(0)
         if (self._vid_stream.isOpened()):
             print("Webcam successfully accessed!\n")
         
-    def stream_capture_image(self):
+    def stream_capture_predict(self):
+        '''
+            Continuous video stream.
+            Press 'q' to quit, and 'c' to capture
+        '''
         while self._vid_stream.isOpened():
-            c = cv2.waitKey(10) & 0xFF
-            if (c == ord('q')):
+            captureKey = cv2.waitKey(10) & 0xFF
+            if (captureKey == ord('q')):
                 break
-            self.__capture_image(c == ord('c'))
-
-
-    def __capture_image(self, capture = False):
-        ret, frame = self._vid_stream.read()
-        cv2.imshow('frame', frame)        
+            ret, frame = self._vid_stream.read()
+            cv2.imshow('frame', frame)        
         
-        if capture:
-            pil_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_face_img = Image.fromarray(pil_frame)
-            print("Image captured!")
+            # Capture and Predict
+            if captureKey == ord('c'):
+                pil_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_face_img = Image.fromarray(pil_frame)
+                print("Image captured!")
             
-            # Perform face detection on captured image
-            self._face_obj.set_base_img( np.array(pil_frame) )
-            processed_face = self._face_obj.process_face_from_img( resize=(100,100) )
-            if processed_face:
-                print("Face Detected!\n")
-                self._face_obj.show_process_result()
-            else:
-                print("Unable to find face. Please look straight at the camera\n")
+                # Perform face detection on captured image
+                self._face_obj.set_base_img( np.array(pil_frame) )
+                processed_face = self._face_obj.process_face_from_img( resize=(100,100) )
+                if processed_face:
+                    print("Face Detected!\n")
+                    # Debugging
+                    if TEST:
+                        self._face_obj.show_process_result()
+                        processed_face.save(f"{TEST_PREFIX}_{self.__ct}.jpg")
+                        self.__ct = self.__ct + 1;
 
-            # Predict emotion using ML model
+                    # Predict emotion using ML model
+                    face_np = np.array(processed_face)
+                    face_np_arr = np.expand_dims(face_np, axis=0) 
+                    predictions = self._model.predict(face_np_arr, verbose=1)
+                    print(predictions)
+                    top_preds = np.argsort(predictions)[0]
+                    print(top_preds)
+                    self.display_top2_emoji(top_preds[6], top_preds[5])
 
+                else:
+                    print("Unable to find face. Please look straight at the camera\n")
 
-            # Debugging
-            if TEST:
-                pil_face_img.save(f"{TEST_PREFIX}_{self.__ct}.jpg")
-                self.__ct = self.__ct + 1;
-
+                
+                
 
     def __del__(self):
-        if (self._vid_stream.isOpened()):
+        print("destructor")
+        if self._vid_stream.isOpened():
             self._vid_stream.release()
         cv2.destroyAllWindows()
         
-        if (TEST):
+        if TEST:
+            print("Destructor")
             file_list = list(Path('.').glob(f'{TEST_PREFIX}*'))
             for f in file_list:
                 try:
@@ -128,11 +160,19 @@ class VideoStreamer:
                     print(f"File {f} doesn't exist")
 
 
-if __name__ == '__main__':
-    Video = VideoStreamer()
-    Video.start_webcam()    
-    Video.stream_capture_image()
 
-    #Face_obj = FaceImageProcessor(args.imagepath)
-    #Face_obj.process_face_from_img(resize=(100,100))
-    #Face_obj.show_process_result()
+
+class App:
+
+    def __init__(self, model_path):
+        self._video = VideoStreamModel(model_path)
+                    
+    def deploy(self):
+        self._video.start_webcam()
+        self._video.stream_capture_predict()
+
+
+if __name__ == '__main__':
+    app = App("./models/best_model_2048_frz_25_test_41.h5")
+    app.deploy()
+    del app
