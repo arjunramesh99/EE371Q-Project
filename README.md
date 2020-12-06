@@ -1,4 +1,4 @@
-# EE371Q-Project
+# Face-To-Emoji Generator
 
 ## Machine Learning Model
 Users can access and download the model at the following [link](https://drive.google.com/drive/folders/1O1qQXRtKiZi57ihtrIOaE8CuMVNcB7At?usp=sharing). To integrate it successfully to the code, add it under a new directory named *models*
