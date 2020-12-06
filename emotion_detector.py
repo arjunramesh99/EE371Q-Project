@@ -11,6 +11,7 @@ from pathlib import Path
 from keras.models import load_model
 
 TEST = True
+REMOVE_NEUTRAL = False
 TEST_PREFIX = "test_face"
 
 emotion = ['Surprise', 'Fear', 'Disgust', 'Happiness', 'Sadness', 'Anger', 'Neutral']
@@ -78,20 +79,26 @@ class VideoStreamModel:
         self._model = load_model(model_path)
         self._face_obj = FaceImageProcessor()
     
-    def display_top2_emoji(self, top1, top2):
+    def display_top3_emoji(self, top1, top2, top3):
         base_path = Path('./emotion_images')
         top1_img = Image.open(base_path / str(top1))
         top2_img = Image.open(base_path / str(top2))
-        plt.subplot(121)
+        top3_img = Image.open(base_path / str(top3))
+        plt.subplot(131)
         plt.imshow(top1_img)
         plt.title(f"Top 1: {emotion[top1]}")
         plt.axis('off')
 
-        plt.subplot(122)
+        plt.subplot(132)
         plt.imshow(top2_img)
         plt.title(f"Top 2: {emotion[top2]}")
         plt.axis('off')
         
+        plt.subplot(133)
+        plt.imshow(top3_img)
+        plt.title(f"Top 3: {emotion[top3]}")
+        plt.axis('off')
+
         plt.show()
 
 
@@ -133,10 +140,12 @@ class VideoStreamModel:
                     face_np = np.array(processed_face)
                     face_np_arr = np.expand_dims(face_np, axis=0) 
                     predictions = self._model.predict(face_np_arr, verbose=1)
-                    print(predictions)
+                    if REMOVE_NEUTRAL:
+                        predictions = np.delete(predictions, 6, 1)
+                    print(f"Preds: {predictions}")
                     top_preds = np.argsort(predictions)[0]
-                    print(top_preds)
-                    self.display_top2_emoji(top_preds[6], top_preds[5])
+                    print(f"Top Preds: {top_preds}")
+                    self.display_top3_emoji(top_preds[-1], top_preds[-2], top_preds[-3])
 
                 else:
                     print("Unable to find face. Please look straight at the camera\n")
